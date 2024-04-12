@@ -109,7 +109,7 @@ void print_grid(int *grid, int width, int height, int rows_per_process) {
     }
 }
 
-std::tuple<char*, int> parse_args(int argc, char *argv[]) {
+std::tuple<char *, int> parse_args(int argc, char *argv[]) {
     if (argc != 3) {
         throw std::invalid_argument("Illegal number of arguments.");
     }
@@ -130,7 +130,7 @@ int run(int argc, char **argv) {
     printf("nof_processes %d\n", nof_processes);
     if (rank == 0) {
         int iterations;
-        char* filename;
+        char *filename;
         std::tie(filename, iterations) = parse_args(argc, argv);
 
         std::ifstream grid_definition(filename);
