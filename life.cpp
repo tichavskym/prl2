@@ -109,28 +109,33 @@ void print_grid(int *grid, int width, int height, int rows_per_process) {
     }
 }
 
+std::tuple<char*, int> parse_args(int argc, char *argv[]) {
+    if (argc != 3) {
+        throw std::invalid_argument("Illegal number of arguments.");
+    }
+
+    int iterations;
+    try {
+        iterations = std::stoi(argv[2]);
+    } catch (int exception) {
+        throw std::invalid_argument("Second argument must be an integer.");
+    }
+    return std::make_tuple(argv[1], iterations);
+}
+
 int run(int argc, char **argv) {
     int rank, nof_processes;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nof_processes);
     printf("nof_processes %d\n", nof_processes);
     if (rank == 0) {
-        if (argc != 3) {
-            perror("Illegal number of arguments.");
-            return 1;
-        }
+        int iterations;
+        char* filename;
+        std::tie(filename, iterations) = parse_args(argc, argv);
 
-        std::ifstream grid_definition(argv[1]);
+        std::ifstream grid_definition(filename);
         if (!grid_definition.is_open()) {
             perror("Error while opening a file (first argument).");
-            return 1;
-        }
-
-        int iterations;
-        try {
-            iterations = std::stoi(argv[2]);
-        } catch (int exception) {
-            perror("Error while converting second argument to integer.\n");
             return 1;
         }
 
