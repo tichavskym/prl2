@@ -136,14 +136,14 @@ int run(int argc, char **argv) {
 
         int width, height;
         std::tie(width, height) = get_dimensions(grid_definition);
-        int array[(width + 2) * (height + 2)] = {0};
-        int new_array[(width + 2) * (height + 2)] = {0};
-        load_array(argv[1], array, width, height);
+        int grid_even[(width + 2) * (height + 2)] = {0};
+        int grid_odd[(width + 2) * (height + 2)] = {0};
+        load_array(argv[1], grid_even, width, height);
 
         printf("Beginning state:\n");
         for (int i = 0; i < height + 2; i++) {
             for (int j = 0; j < width + 2; j++) {
-                printf("%d", array[idx(j, i, width)]);
+                printf("%d", grid_even[idx(j, i, width)]);
             }
             printf("\n");
         }
@@ -155,18 +155,18 @@ int run(int argc, char **argv) {
         for (int i = 1; i < nof_processes; i++) {
             if (i == nof_processes - 1) {
                 MPI_Send(
-                        array + i * rows_per_process, (height - rows_per_process * i) * width, MPI_INT, i, 0,
+                        grid_even + i * rows_per_process, (height - rows_per_process * i) * width, MPI_INT, i, 0,
                         MPI_COMM_WORLD
                 );
             } else {
-                MPI_Send(array + i * rows_per_process, rows_per_process * width, MPI_INT, i, 0, MPI_COMM_WORLD);
+                MPI_Send(grid_even + i * rows_per_process, rows_per_process * width, MPI_INT, i, 0, MPI_COMM_WORLD);
             }
         }
         printf("iterations %d\n", iterations);
 
         for (int i = 0; i < iterations; i++) {
-            calculate_step(array, new_array, width, rows_per_process, height);
-//            array = new_array;
+            calculate_step(grid_even, grid_odd, width, rows_per_process, height);
+//            grid_even = grid_odd;
             // send the boundary row to the next process and receive the boundary row from the next process
         }
         // calculate step, send the boundary row to the next process and receive the boundary row from the next process
@@ -176,10 +176,10 @@ int run(int argc, char **argv) {
         // send it to all processes
 //        for (int i = 1; i < height + 1; i++) {
 //            for (int j = 1; j < width + 1; j++) {
-//                printf("%d", array[i][j]);
+//                printf("%d", grid_even[i][j]);
 //            }
 //        }
-        print_grid(new_array, width, height, rows_per_process);
+        print_grid(grid_odd, width, height, rows_per_process);
     } else {
 
         //MPI_Recv();
