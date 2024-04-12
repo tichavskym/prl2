@@ -9,7 +9,12 @@ int idx(int x, int y, int width) {
 
 // TODO if number of processes > nof_rows -> do sth about it
 
-std::tuple<int, int> get_dimensions(std::ifstream &f) {
+std::tuple<int, int> get_dimensions(char * filename) {
+    std::ifstream f(filename);
+    if (!f.is_open()) {
+        throw std::invalid_argument("Error while opening a file (first argument).");
+    }
+
     int width, height = 1;
 
     std::string line;
@@ -133,25 +138,19 @@ int run(int argc, char **argv) {
         char *filename;
         std::tie(filename, iterations) = parse_args(argc, argv);
 
-        std::ifstream grid_definition(filename);
-        if (!grid_definition.is_open()) {
-            perror("Error while opening a file (first argument).");
-            return 1;
-        }
-
         int width, height;
-        std::tie(width, height) = get_dimensions(grid_definition);
+        std::tie(width, height) = get_dimensions(filename);
         int grid_even[(width + 2) * (height + 2)] = {0};
         int grid_odd[(width + 2) * (height + 2)] = {0};
         load_array(argv[1], grid_even, width, height);
 
-        printf("Beginning state:\n");
-        for (int i = 0; i < height + 2; i++) {
-            for (int j = 0; j < width + 2; j++) {
-                printf("%d", grid_even[idx(j, i, width)]);
-            }
-            printf("\n");
-        }
+//        printf("Beginning state:\n");
+//        for (int i = 0; i < height + 2; i++) {
+//            for (int j = 0; j < width + 2; j++) {
+//                printf("%d", grid_even[idx(j, i, width)]);
+//            }
+//            printf("\n");
+//        }
 
         int rows_per_process = height / nof_processes;
         printf("rows per process %d\n", rows_per_process);
@@ -167,14 +166,15 @@ int run(int argc, char **argv) {
                 MPI_Send(grid_even + i * rows_per_process, rows_per_process * width, MPI_INT, i, 0, MPI_COMM_WORLD);
             }
         }
-        printf("iterations %d\n", iterations);
 
         for (int i = 0; i < iterations; i++) {
-            calculate_step(grid_even, grid_odd, width, rows_per_process, height);
-//            grid_even = grid_odd;
-            // send the boundary row to the next process and receive the boundary row from the next process
+            if (i % 2 == 0) {
+                calculate_step(grid_even, grid_odd, width, rows_per_process, height);
+            } else {
+                calculate_step(grid_odd, grid_even, width, rows_per_process, height);
+            }
+            // todo send the boundary row to the next process and receive the boundary row from the next process
         }
-        // calculate step, send the boundary row to the next process and receive the boundary row from the next process
 
         // gather the results
         // MPI_Gather();
@@ -184,7 +184,11 @@ int run(int argc, char **argv) {
 //                printf("%d", grid_even[i][j]);
 //            }
 //        }
-        print_grid(grid_odd, width, height, rows_per_process);
+        if (iterations % 2 == 1) {
+            print_grid(grid_odd, width, height, rows_per_process);
+        } else {
+            print_grid(grid_even, width, height, rows_per_process);
+        }
     } else {
 
         //MPI_Recv();

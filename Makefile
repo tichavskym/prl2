@@ -1,4 +1,5 @@
 PROC=1
+STEPS=2
 
 
 .PHONY: build run clean
@@ -9,7 +10,7 @@ build:
 	mpic++ --prefix /usr/local/share/OpenMPI -o life life.cpp
 
 run: build
-	mpirun --prefix /usr/local/share/OpenMPI --use-hwthread-cpus -np $(PROC) life grid.txt 1
+	mpirun --prefix /usr/local/share/OpenMPI --use-hwthread-cpus -np $(PROC) life grid.txt $(STEPS)
 
 clean:
 	rm life
