@@ -27,6 +27,13 @@ std::tuple<int, int> get_dimensions(std::ifstream &f) {
     return std::make_tuple(width, height);
 }
 
+/** Get number of alive neighbours for a cell given by coordinates x and y.
+ *
+ * @param array representing grid
+ * @param x
+ * @param y
+ * @param width of the grid
+ * */
 int get_number_of_alive_neighbours(int *array, int x, int y, int width) {
     int count = 0;
     for (int i = x - 1; i < x + 2; i++) {
@@ -48,13 +55,13 @@ void calculate_point(int *array, int *new_array, int x, int y, int width, int he
         if (alive_neigh < 2 || alive_neigh > 3) {
             new_array[idx(x, y, width)] = 0;
         } else {
-            new_array[idx(x, y, width)] = array[idx(x, y, width)];
+            new_array[idx(x, y, width)] = 1;
         }
     } else {
         if (alive_neigh == 3) {
             new_array[idx(x, y, width)] = 1;
         } else {
-            new_array[idx(x, y, width)] = array[idx(x, y, width)];
+            new_array[idx(x, y, width)] = 0;
         }
     }
 }
@@ -62,7 +69,6 @@ void calculate_point(int *array, int *new_array, int x, int y, int width, int he
 void calculate_step(int *array, int *new_array, int width, int rows_per_process, int height) {
     // TODO what if last process
     for (int h = 1; h < rows_per_process + 1; h++) {
-        printf("Calculating step for row %d\n", h);
         for (int w = 1; w < width + 1; w++) {
             calculate_point(array, new_array, w, h, width, height);
         }
@@ -82,6 +88,24 @@ void load_array(char *filename, int *array, int width, int height) {
             array[idx(w + 1, h, width)] = x;
         }
         h++;
+    }
+}
+
+void print_grid(int *grid, int width, int height, int rows_per_process) {
+    int row = 0;
+    int rows = 0;
+    for (int i = 1; i < height + 1; i++) {
+        if (rows == rows_per_process) {
+            row++;
+            rows = 0;
+        }
+        printf("%d: ", row);
+        rows++;
+
+        for (int j = 1; j < width + 1; j++) {
+            printf("%d", grid[idx(j, i, width)]);
+        }
+        printf("\n");
     }
 }
 
@@ -155,14 +179,7 @@ int run(int argc, char **argv) {
 //                printf("%d", array[i][j]);
 //            }
 //        }
-        printf("the result:\n");
-        for (int i = 1; i < height + 1; i++) {
-            for (int j = 1; j < width + 1; j++) {
-                printf("%d", new_array[idx(j, i, width)]);
-            }
-            printf("\n");
-        }
-
+        print_grid(new_array, width, height, rows_per_process);
     } else {
 
         //MPI_Recv();
