@@ -1,5 +1,5 @@
-PROC=3
-STEPS=1
+PROC=1
+STEPS=4
 
 
 .PHONY: build run clean
@@ -14,12 +14,3 @@ run: build
 
 clean:
 	rm life
-#generate:
-#	dd if=/dev/random bs=1 count=$(NUMBERS) of=numbers 2> /dev/null
-
-#run: build
-#	# TODO use-hwthread-cpus is my addition to the command from assignment
-#	mpirun --prefix /usr/local/share/OpenMPI --use-hwthread-cpus -np $(PROC) pms
-#
-#clean:
-#	rm numbers pms
