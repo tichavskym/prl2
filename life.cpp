@@ -11,6 +11,7 @@
         if (DEBUG) { \
             fprintf(stderr, "%s:%d: ", __FILE__, __LINE__);  \
             fprintf(stderr, __VA_ARGS__);                    \
+            fflush(stderr);                                  \
         } \
     } while (0);
 #else
@@ -135,7 +136,7 @@ void print_grid(int *grid, int width, int height, int rows_per_process) {
     }
 }
 
-void print_local_grid(int* local_grid,int  width,int  rows_per_process, int rank) {
+void print_local_grid(int *local_grid, int width, int rows_per_process, int rank) {
     for (int i = 0; i < (rows_per_process) + 2; i++) {
         printf("%d: ", rank);
         for (int j = 0; j < width + 2; j++) {
@@ -162,11 +163,13 @@ std::tuple<char *, int> parse_args(int argc, char *argv[]) {
 // Exchange data between processes
 void exchange_data(int *grid, int width, int nof_processes, int rows_per_process, int rank) {
     if (rank % 2 == 0) {
-        if (rank != nof_processes - 1){
+        if (rank != nof_processes - 1) {
             debug("%d: Exchanging data with process %d\n", rank, rank + 1);
             // send the boundary row to the next process
-            MPI_Send(grid + rows_per_process * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
-            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING) , (width + PADDING), MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(grid + rows_per_process * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+                     MPI_COMM_WORLD);
+            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         // receive the boundary row from the previous process
         if (rank != 0) {
@@ -175,7 +178,7 @@ void exchange_data(int *grid, int width, int nof_processes, int rows_per_process
             MPI_Recv(grid, (width + PADDING), MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     } else {
-        if (rank  != 0){
+        if (rank != 0) {
             debug("%d: Exchanging data with process %d\n", rank, rank - 1);
             // send the boundary row to the next process
             MPI_Recv(grid, (width + PADDING), MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -184,16 +187,21 @@ void exchange_data(int *grid, int width, int nof_processes, int rows_per_process
         // receive the boundary row from the previous process
         if (rank != nof_processes - 1) {
             debug("%d: Exchanging data with process %d\n", rank, rank + 1);
-            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(grid + rows_per_process * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0, MPI_COMM_WORLD);
+            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(grid + rows_per_process * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+                     MPI_COMM_WORLD);
         }
     }
 }
 
-void calculate(int *grid_even, int *grid_odd, int width, int height, int rows_per_process, int iterations, int rank, int nof_processes) {
+void calculate(int *grid_even, int *grid_odd, int width, int height, int rows_per_process, int iterations, int rank,
+               int nof_processes) {
     for (int i = 0; i < iterations; i++) {
         if (i % 2 == 0) {
+            debug("%d: Calculate step\n", rank);
             calculate_step(grid_even, grid_odd, width, rows_per_process, height);
+            debug("%d: Exchange data\n", rank);
             exchange_data(grid_odd, width, nof_processes, rows_per_process, rank);
         } else {
             calculate_step(grid_odd, grid_even, width, rows_per_process, height);
@@ -204,7 +212,8 @@ void calculate(int *grid_even, int *grid_odd, int width, int height, int rows_pe
     }
 }
 
-void distribute_data_across_processes(int *grid, int width, int height, int rows_per_process, int nof_processes, int iterations ) {
+void distribute_data_across_processes(int *grid, int width, int height, int rows_per_process, int nof_processes,
+                                      int iterations) {
     for (int i = 1; i < nof_processes; i++) {
         MPI_Send(&width, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         MPI_Send(&height, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
@@ -213,7 +222,7 @@ void distribute_data_across_processes(int *grid, int width, int height, int rows
 
 
         if (i == (nof_processes - 1)) {
-            int *send_start = grid + (i * rows_per_process) * (width + PADDING);
+            int *send_start = grid + (i * rows_per_process - 1) * (width + PADDING);
             int send_length = ((height - (rows_per_process * i)) + PADDING) * (width + PADDING);
             MPI_Send(
                     send_start,
@@ -269,13 +278,15 @@ int run(int argc, char **argv) {
             grid = local_grid_even;
         }
 
-        MPI_Gather(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, grid_even + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Gather(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT,
+                   grid_even + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, 0, MPI_COMM_WORLD);
 
         debug("Result:\n");
         print_grid(grid_even, width, height, rows_per_process);
     } else {
         int rank;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        debug("Process %d\n", rank);
 
         int width, height, rows_per_process, iterations;
         MPI_Recv(&width, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -283,10 +294,17 @@ int run(int argc, char **argv) {
         MPI_Recv(&rows_per_process, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&iterations, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        int local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
+        int local_grid_size;
+        if (rank == (nof_processes - 1)) {
+            local_grid_size = ((height - (rows_per_process * (nof_processes - 1))) + PADDING) * (width + PADDING);
+        } else {
+            local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
+        }
         int local_grid_even[local_grid_size] = {0};
         int local_grid_odd[local_grid_size] = {0};
+        debug("%d: before receiving the grid\n", rank);
         MPI_Recv(&local_grid_even, local_grid_size, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        debug("%d: after receiving the grid\n", rank);
 
         calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank, nof_processes);
 
@@ -296,7 +314,7 @@ int run(int argc, char **argv) {
         } else {
             grid = local_grid_even;
         }
-        MPI_Gather(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Gather(grid + (width + PADDING), local_grid_size - PADDING, MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
     }
     return 0;
 }
