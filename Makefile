@@ -1,5 +1,5 @@
 PROC=2
-STEPS=1
+STEPS=2
 
 
 .PHONY: build run clean

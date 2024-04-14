@@ -193,13 +193,9 @@ void exchange_data(int *grid, int width, int nof_processes, int rows_per_process
 void calculate(int *grid_even, int *grid_odd, int width, int height, int rows_per_process, int iterations, int rank, int nof_processes) {
     for (int i = 0; i < iterations; i++) {
         if (i % 2 == 0) {
-            printf("%d: Grid pre calculate\n", rank);
-            print_local_grid(grid_even, width, rows_per_process, rank);
             calculate_step(grid_even, grid_odd, width, rows_per_process, height);
             exchange_data(grid_odd, width, nof_processes, rows_per_process, rank);
         } else {
-            printf("%d: Grid pre calculate\n", rank);
-            print_local_grid(grid_odd, width, rows_per_process, rank);
             calculate_step(grid_odd, grid_even, width, rows_per_process, height);
             exchange_data(grid_even, width, nof_processes, rows_per_process, rank);
         }
@@ -217,16 +213,8 @@ void distribute_data_across_processes(int *grid, int width, int height, int rows
 
 
         if (i == (nof_processes - 1)) {
-            printf("This is it\n");
             int *send_start = grid + (i * rows_per_process) * (width + PADDING);
             int send_length = ((height - (rows_per_process * i)) + PADDING) * (width + PADDING);
-            printf("send_lenght: %d\n", send_length);
-            debug("send lenght: %d\n", send_length);
-            printf("This is what we're sending");
-            for (int j = 0; j < send_length; j++) {
-                printf("%d", send_start[j]);
-            }
-            printf("\n");
             MPI_Send(
                     send_start,
                     send_length,
@@ -251,8 +239,8 @@ int run(int argc, char **argv) {
     int rank, nof_processes;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nof_processes);
-    printf("nof_processes %d\n", nof_processes);
     if (rank == 0) {
+        debug("Number of processes: %d\n", nof_processes);
         int iterations;
         char *filename;
         std::tie(filename, iterations) = parse_args(argc, argv);
@@ -264,7 +252,6 @@ int run(int argc, char **argv) {
         load_array(filename, grid_even, width, height);
 
         int rows_per_process = height / nof_processes;
-        debug("Rows per process: %d\n", rows_per_process);
 
         distribute_data_across_processes(grid_even, width, height, rows_per_process, nof_processes, iterations);
         int local_grid_even[(rows_per_process + 2) * (width + PADDING)];
@@ -274,15 +261,18 @@ int run(int argc, char **argv) {
         }
 
         calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank, nof_processes);
-        print_local_grid(local_grid_odd, width, rows_per_process, rank);
 
-        // MPI_Gather();
+        int *grid;
+        if (iterations % 2 == 1) {
+            grid = local_grid_odd;
+        } else {
+            grid = local_grid_even;
+        }
 
-//        if (iterations % 2 == 1) {
-//            print_grid(grid_odd, width, height, rows_per_process);
-//        } else {
-//            print_grid(grid_even, width, height, rows_per_process);
-//        }
+        MPI_Gather(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, grid_even + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, 0, MPI_COMM_WORLD);
+
+        debug("Result:\n");
+        print_grid(grid_even, width, height, rows_per_process);
     } else {
         int rank;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -292,21 +282,21 @@ int run(int argc, char **argv) {
         MPI_Recv(&height, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&rows_per_process, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&iterations, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        printf("%d: received iterations: %d\n", rank, iterations);
 
         int local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
-        debug("local grid size: %d\n", local_grid_size);
         int local_grid_even[local_grid_size] = {0};
         int local_grid_odd[local_grid_size] = {0};
         MPI_Recv(&local_grid_even, local_grid_size, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        printf("%d: received local grid even\n", rank);
-        for (int i = 0; i < local_grid_size; i++) { printf("%d", local_grid_even[i]);}
-        printf("\n");
 
         calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank, nof_processes);
-        printf("%d: Grid post calculate\n", rank);
-        print_local_grid(local_grid_odd, width, rows_per_process, rank);
-    // TODO MPI_Gather
+
+        int *grid;
+        if (iterations % 2 == 1) {
+            grid = local_grid_odd;
+        } else {
+            grid = local_grid_even;
+        }
+        MPI_Gather(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, NULL, 0, MPI_INT, 0, MPI_COMM_WORLD);
     }
     return 0;
 }
