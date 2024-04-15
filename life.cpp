@@ -1,5 +1,15 @@
 /** PRL 2nd project: Game of Life
  * Author: Milan Tichavský (xticha09)
+ *
+ * Design: Processes split the work by rows. Each process gets the same amount of rows to calculate, except for the last
+ * one, which takes the remainder. The grid, which has certain `width` and `height`, is padded from each side by zeros
+ * to simplify the calculations (therefore, you'll see a lot of usages of PADDING macro, which says, that the internal
+ * representation of the grid has width_internal = width + PADDING and height_internal = height + PADDING.
+ * The grid is stored in a 1D array, where the 2D indexing is possible via the `idx` function.
+ *
+ * At first, zeroth process loads the grid from the file and distributes it to other processes.
+ * During calculation, the neighbouring processes exchange information about boundary rows between each other. After all
+ * iterations, the results are sent back to the zeroth process, which prints the final grid.
  */
 
 #include "mpi.h"
@@ -272,6 +282,37 @@ void distribute_data_across_processes(int *grid, int width, int height, int rows
     }
 }
 
+int get_local_grid_size(int nof_processes, int width,  int height, int rows_per_process, int rank) {
+    if (rank == (nof_processes - 1)) {
+        return get_last_process_grid_height(height, rows_per_process, nof_processes) *
+                          (width + PADDING);
+    } else {
+        return (width + PADDING) * (rows_per_process + PADDING);
+    }
+}
+
+/** Gather results into `result` array
+ *
+ * @param result
+ * @param local_grid the local grid of 0th process
+ * @param width, height dimensions of the grid
+ * @param nof_processes
+ * @param rows_per_process
+ */
+void gather_results(int* result, int *local_grid, int width, int height, int nof_processes, int rows_per_process) {
+    int local_grid_size = get_local_grid_size(nof_processes, width, height, rows_per_process, 0);
+    for (int i = 0; i < local_grid_size; i++) {
+        result[i] = local_grid[i];
+    }
+    for (int i = 1; i < nof_processes; i++) {
+        local_grid_size = get_local_grid_size(nof_processes, width, height, rows_per_process, i);
+        MPI_Recv(result + (i * rows_per_process + 1) * (width + PADDING),
+                 local_grid_size - (width + PADDING) * PADDING,
+                 MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE
+        );
+    }
+}
+
 
 int run(int argc, char **argv) {
     int rank, nof_processes;
@@ -303,24 +344,7 @@ int run(int argc, char **argv) {
         int *grid = calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank,
                               nof_processes);
 
-        for (int i = 0; i < local_grid_size; i++) {
-            grid_even[i] = grid[i];
-        }
-
-        //print_grid(grid_even, width, height, rows_per_process);
-        //printf("\n");
-        for (int i = 1; i < nof_processes; i++) {
-            if (i == (nof_processes - 1)) {
-                local_grid_size = get_last_process_grid_height(height, rows_per_process, nof_processes) *
-                                  (width + PADDING);
-            } else {
-                local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
-            }
-            MPI_Recv(grid_even + (i * rows_per_process + 1) * (width + PADDING),
-                     local_grid_size - (width + PADDING) * PADDING,
-                     MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE
-            );
-        }
+        gather_results(grid_even, grid, width, height, nof_processes, rows_per_process);
         print_grid(grid_even, width, height, rows_per_process);
     } else {
         int rank;
