@@ -74,7 +74,7 @@ int get_number_of_alive_neighbours(int *array, int x, int y, int width) {
     return count;
 }
 
-void calculate_point(int *array, int *new_array, int x, int y, int width, int height) {
+void calculate_point(int *array, int *new_array, int x, int y, int width) {
     int alive_neigh = get_number_of_alive_neighbours(array, x, y, width);
     if (array[idx(x, y, width)] == 1) {
         if (alive_neigh < 2 || alive_neigh > 3) {
@@ -91,7 +91,7 @@ void calculate_point(int *array, int *new_array, int x, int y, int width, int he
     }
 }
 
-int get_last_process_actual_grid_height(int height, int rows_per_process, int nof_processes) {
+int get_last_process_grid_height(int height, int rows_per_process, int nof_processes) {
     return (height - (rows_per_process * (nof_processes - 1))) + PADDING;
 }
 
@@ -99,18 +99,17 @@ int is_last_proc(int rank, int nof_processes) {
     return rank == nof_processes - 1;
 }
 
-void
-calculate_step(int *array, int *new_array, int width, int rows_per_process, int height, int rank, int nof_processes) {
+void calculate_step(int *array, int *new_array, int width, int rows_per_process, int height, int rank, int nof_processes) {
     int height_iterate;
     if (is_last_proc(rank, nof_processes)) {
-        height_iterate = get_last_process_actual_grid_height(height, rows_per_process, nof_processes);
+        height_iterate = get_last_process_grid_height(height, rows_per_process, nof_processes) - 1;
     } else {
         height_iterate = rows_per_process + 1;
     }
 
     for (int h = 1; h < height_iterate; h++) {
         for (int w = 1; w < width + 1; w++) {
-            calculate_point(array, new_array, w, h, width, height);
+            calculate_point(array, new_array, w, h, width);
         }
     }
 }
@@ -210,9 +209,9 @@ void exchange_data(int *grid, int width, int nof_processes, int rows_per_process
         // receive the boundary row from the previous process
         if (rank != nof_processes - 1) {
             // debug_print(rank, rank + 1, grid + rows_per_process * (width + PADDING), payload_size);
-            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+            MPI_Recv(grid + (rows_per_process + 1) * (width + PADDING), payload_size, MPI_INT, rank + 1, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(grid + rows_per_process * (width + PADDING), (width + PADDING), MPI_INT, rank + 1, 0,
+            MPI_Send(grid + rows_per_process * (width + PADDING), payload_size, MPI_INT, rank + 1, 0,
                      MPI_COMM_WORLD);
         }
     }
@@ -224,7 +223,7 @@ int *calculate(int *grid_even, int *grid_odd, int width, int height, int rows_pe
         if (i % 2 == 0) {
             calculate_step(grid_even, grid_odd, width, rows_per_process, height, rank, nof_processes);
             exchange_data(grid_odd, width, nof_processes, rows_per_process, rank);
-
+//
 //            printf("iteration %d, rank %d\n", i + 1, rank);
 //            print_local_grid(grid_odd, width, rows_per_process, rank);
 //            printf("\n");
@@ -325,7 +324,7 @@ int run(int argc, char **argv) {
         //printf("\n");
         for (int i = 1; i < nof_processes; i++) {
             if (i == (nof_processes - 1)) {
-                local_grid_size = get_last_process_actual_grid_height(height, rows_per_process, nof_processes) *
+                local_grid_size = get_last_process_grid_height(height, rows_per_process, nof_processes) *
                                   (width + PADDING);
             } else {
                 local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
