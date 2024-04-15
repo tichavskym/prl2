@@ -1,15 +1,23 @@
 /** PRL 2nd project: Game of Life
  * Author: Milan Tichavský (xticha09)
  *
- * Design: Processes split the work by rows. Each process gets the same amount of rows to calculate, except for the last
- * one, which takes the remainder. The grid, which has certain `width` and `height`, is padded from each side by zeros
- * to simplify the calculations (therefore, you'll see a lot of usages of PADDING macro, which says, that the internal
- * representation of the grid has width_internal = width + PADDING and height_internal = height + PADDING.
+ * Implementation with a fixed boundary (the cells behind the boundary are considered to have 0 values).
+ *
+ * Design:
+ * The work of processes is split by rows. At first, the 0th process loads the file with the initial grid definition
+ * and sends each process the same amount of rows to calculate. In case the number of rows cannot be fully divided by
+ * the number of processes, the last process is responsible for calculating all the remaining rows.
+ *
+ * The internal grid, which has certain `width` and `height`, is padded internally from each side by zeros
+ * to simplify the calculations (therefore, you'll see a lot of usages of PADDING macro, which says, that for
+ * the internal representation of the grid: width_internal = width + PADDING and height_internal = height + PADDING).
+ *
+ * Also, this means that the boundaries of the grid are defined by the dimensions of the grid on input.
  * The grid is stored in a 1D array, where the 2D indexing is possible via the `idx` function.
  *
- * At first, zeroth process loads the grid from the file and distributes it to other processes.
- * During calculation, the neighbouring processes exchange information about boundary rows between each other. After all
- * iterations, the results are sent back to the zeroth process, which prints the final grid.
+ * During calculation, the neighbouring processes exchange the information about boundary rows between each other.
+ * For more information, see `exchange_data method`. After all iterations, the results are sent back to the zeroth
+ * process, which prints out the final grid.
  */
 
 #include "mpi.h"
@@ -192,9 +200,15 @@ std::tuple<char *, int> parse_args(int argc, char *argv[]) {
 
 /** Exchange data between processes
  *
- * The data being exchanged are boundary rows (each process processes several consecutive rows).
- * Even processes always send data first while odd ones receive first. Even processes at first exchange data with
- * the next process and then with the previous ones.
+ * Each process needs to exchange data with the two neighbouring processes. The data being exchanged are boundary rows,
+ * that are needed for proper calculation of the rows on the edges of the local grid (=part of the grid that given
+ * process calculates).
+ *
+ * The sending is always done from even process to odd process first, and than followed the other way around.
+ * In the first step, even processes exchange data with the following process (rank + 1), and in the second step they
+ * exchange data with the previous process (rank - 1).
+ *
+ * Zeroth and the last process exchange data from only one side (the other doesn't make sense).
  * */
 void exchange_data(int *grid, int width, int nof_processes, int rows_per_process, int rank) {
     int payload_size = (width + PADDING);
