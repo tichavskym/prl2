@@ -91,9 +91,24 @@ void calculate_point(int *array, int *new_array, int x, int y, int width, int he
     }
 }
 
-void calculate_step(int *array, int *new_array, int width, int rows_per_process, int height) {
-    // TODO what if last process
-    for (int h = 1; h < rows_per_process + 1; h++) {
+int get_last_process_actual_grid_height(int height, int rows_per_process, int nof_processes) {
+    return (height - (rows_per_process * (nof_processes - 1))) + PADDING;
+}
+
+int is_last_proc(int rank, int nof_processes) {
+    return rank == nof_processes - 1;
+}
+
+void
+calculate_step(int *array, int *new_array, int width, int rows_per_process, int height, int rank, int nof_processes) {
+    int height_iterate;
+    if (is_last_proc(rank, nof_processes)) {
+        height_iterate = get_last_process_actual_grid_height(height, rows_per_process, nof_processes);
+    } else {
+        height_iterate = rows_per_process + 1;
+    }
+
+    for (int h = 1; h < height_iterate; h++) {
         for (int w = 1; w < width + 1; w++) {
             calculate_point(array, new_array, w, h, width, height);
         }
@@ -207,7 +222,7 @@ int *calculate(int *grid_even, int *grid_odd, int width, int height, int rows_pe
                int nof_processes) {
     for (int i = 0; i < iterations; i++) {
         if (i % 2 == 0) {
-            calculate_step(grid_even, grid_odd, width, rows_per_process, height);
+            calculate_step(grid_even, grid_odd, width, rows_per_process, height, rank, nof_processes);
             exchange_data(grid_odd, width, nof_processes, rows_per_process, rank);
 
 //            printf("iteration %d, rank %d\n", i + 1, rank);
@@ -215,7 +230,7 @@ int *calculate(int *grid_even, int *grid_odd, int width, int height, int rows_pe
 //            printf("\n");
 //            fflush(stdout);
         } else {
-            calculate_step(grid_odd, grid_even, width, rows_per_process, height);
+            calculate_step(grid_odd, grid_even, width, rows_per_process, height, rank, nof_processes);
             exchange_data(grid_even, width, nof_processes, rows_per_process, rank);
 
 //            printf("iteration %d, rank %d\n", i, rank);
@@ -309,9 +324,16 @@ int run(int argc, char **argv) {
         //print_grid(grid_even, width, height, rows_per_process);
         //printf("\n");
         for (int i = 1; i < nof_processes; i++) {
-            MPI_Recv(grid_even + (i * rows_per_process + 1) * (width + PADDING), rows_per_process * (width + PADDING),
+            if (i == (nof_processes - 1)) {
+                local_grid_size = get_last_process_actual_grid_height(height, rows_per_process, nof_processes) *
+                                  (width + PADDING);
+            } else {
+                local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
+            }
+            MPI_Recv(grid_even + (i * rows_per_process + 1) * (width + PADDING),
+                     local_grid_size - (width + PADDING) * PADDING,
                      MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE
-             );
+            );
         }
         print_grid(grid_even, width, height, rows_per_process);
     } else {
@@ -338,15 +360,15 @@ int run(int argc, char **argv) {
         int *grid = calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank,
                               nof_processes);
 
-        // printf("%d >> 0: ", rank);
-//        for (int i = 0; i < rows_per_process * (width + PADDING); i++) {
+//        printf("%d >> 0: ", rank);
+//        for (int i = 0; i < local_grid_size - (width + PADDING) * PADDING; i++) {
 //            printf("%d", (grid + (width + PADDING))[i]);
 //        }
 //        printf("\n");
 //        fflush(stdout);
 
-        // TODO last process has different number of rows (+ match receive)
-        MPI_Send(grid + (width + PADDING), rows_per_process * (width + PADDING), MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(grid + (width + PADDING), local_grid_size - (width + PADDING) * PADDING, MPI_INT, 0, 0,
+                 MPI_COMM_WORLD);
     }
     return 0;
 }
