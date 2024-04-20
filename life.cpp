@@ -339,8 +339,13 @@ int run(int argc, char **argv) {
 
         int width, height;
         std::tie(width, height) = get_dimensions(filename);
-        int grid_even[(width + 2) * (height + 2)] = {0};
-        int grid_odd[(width + 2) * (height + 2)] = {0};
+
+        int grid_plus_padding_size = (width + 2) * (height + 2);
+        int grid_even[grid_plus_padding_size];
+        memset(grid_even, 0, grid_plus_padding_size * sizeof(int));
+        int grid_odd[grid_plus_padding_size];
+        memset(grid_odd, 0, grid_plus_padding_size * sizeof(int));
+
         load_grid(filename, grid_even, width);
 
         int rows_per_process = height / nof_processes;
@@ -348,9 +353,11 @@ int run(int argc, char **argv) {
         distribute_data_across_processes(grid_even, width, height, rows_per_process, nof_processes, iterations);
 
         // The start of computation of the split for 0th process
-        int local_grid_size = (rows_per_process + 2) * (width + PADDING);
+        int local_grid_size = (rows_per_process + PADDING) * (width + PADDING);
         int local_grid_even[local_grid_size];
-        int local_grid_odd[local_grid_size] = {0};
+        int local_grid_odd[local_grid_size];
+        memset(local_grid_odd, 0, local_grid_size * sizeof(int));
+
         for (int i = 0; i < local_grid_size; i++) {
             local_grid_even[i] = grid_even[i];
         }
@@ -377,8 +384,11 @@ int run(int argc, char **argv) {
             local_grid_size = (width + PADDING) * (rows_per_process + PADDING);
         }
 
-        int local_grid_even[local_grid_size] = {0};
-        int local_grid_odd[local_grid_size] = {0};
+        int local_grid_even[local_grid_size];
+        memset(local_grid_even, 0, local_grid_size * sizeof(int));
+        int local_grid_odd[local_grid_size];
+        memset(local_grid_odd, 0, local_grid_size * sizeof(int));
+
         MPI_Recv(&local_grid_even, local_grid_size, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         int *grid = calculate(local_grid_even, local_grid_odd, width, height, rows_per_process, iterations, rank,
