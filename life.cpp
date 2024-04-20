@@ -26,7 +26,7 @@
 
 #define PADDING 2
 
-#define DEBUG 1
+
 #ifdef DEBUG
 #define debug(...) \
     do {           \
